@@ -1,0 +1,46 @@
+# === Capturas de tráfego ===
+# Podem ser grandes e conter dados sensíveis.
+# Para versionar uma captura de exemplo, use: git add -f docs/exemplo.pcap
+*.pcap
+*.pcapng
+*.cap
+
+# === Chaves e certificados (Fase 3 - TLS) ===
+*.key
+*.pem
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# === Python ===
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# === C / C++ ===
+*.o
+*.a
+*.so
+*.out
+build/
+bin/
+
+# === Logs ===
+*.log
+
+# === Variáveis de ambiente ===
+.env
+
+# === IDEs e editores ===
+.vscode/
+.idea/
+*.swp
+*~
+
+# === Sistema operacional ===
+.DS_Store
+Thumbs.db
