@@ -38,6 +38,29 @@ Proteção do canal com TLS e implementação de mecanismos para detectar tentat
 - <!-- Linguagem e versão, ex.: Python 3.x / gcc -->
 - <!-- Dependências, se houver -->
 
+## Protocolo de aplicação
+
+Protocolo texto claro sobre TCP, mensagens terminadas em `\n`.
+
+### Comandos (cliente → servidor)
+| Comando               | Descrição                          |
+|------------------------|-------------------------------------|
+| `LOGIN usuario senha`  | Autentica a sessão                  |
+| `SET chave valor`      | Grava um par chave/valor             |
+| `GET chave`            | Consulta o valor de uma chave        |
+| `DEL chave`            | Remove uma chave                     |
+| `QUIT`                 | Encerra a conexão                    |
+
+### Respostas (servidor → cliente)
+| Resposta         | Significado                          |
+|-------------------|----------------------------------------|
+| `OK`              | Comando executado com sucesso          |
+| `OK valor`        | Sucesso, retornando o valor (GET)       |
+| `ERR mensagem`    | Falha (não autenticado, chave inexistente, etc.) |
+
+### Porta padrão
+`9999/tcp`
+
 ## Como executar
 
 ```bash
@@ -47,11 +70,14 @@ sudo <comando para rodar o sniffer>
 ```
 
 <!-- Completar com as instruções de cada fase conforme forem implementadas -->
+# Servidor (fase1-sniffer/server.py ou pasta equivalente)
+python3 server.py
+
 
 ## Integrantes
 
 - Rosana Schreiner Budant — [@RosanaBudant](https://github.com/RosanaBudant)
-- <!-- Nome — @usuario -->
+- Luísa Kirsch Silva Zarth - [@LuisaZarth](https://github.com/LuisaZarth)
 - <!-- Nome — @usuario -->
 
 ## Aviso
