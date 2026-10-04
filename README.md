@@ -19,7 +19,7 @@ Captura passiva de pacotes diretamente de um *raw socket*, com decodificação d
 |------------|---------|--------|
 | Servidor | `fase1-sniffer/server.py` | ✅ Implementado |
 | Cliente | `fase1-sniffer/client.py` | ✅ Implementado |
-| Sniffer | — | ⏳ Pendente |
+| Sniffer | `fase1-sniffer/client.py` | ⏳ Em avaliação |
 
 ### Fase 2 — Proxy MITM concorrente
 Proxy posicionado entre cliente e servidor, capaz de atender múltiplas conexões simultâneas, interceptando e (opcionalmente) alterando as mensagens trocadas.
@@ -33,7 +33,9 @@ Proteção do canal com TLS e implementação de mecanismos para detectar tentat
 .
 ├── fase1-sniffer/
 │   ├── server.py      # Servidor do protocolo
-│   └── client.py      # Cliente (interativo ou roteiro automático)
+│   ├── client.py      # Cliente (interativo ou roteiro automático)
+│   └── sniffer.py     # Sniffer de pacotes TCP
+│
 └── README.md
 ```
 
@@ -81,23 +83,32 @@ Regra geral: respostas que começam com `OK` indicam sucesso; respostas que come
 - Os dados ficam em memória, compartilhados entre as conexões, e se perdem ao reiniciar o servidor.
 - O servidor atende **um cliente por vez**: uma segunda conexão espera até a primeira terminar.
 - O log do servidor exibe as credenciais recebidas, o que ajuda a conferir o que o sniffer captura.
+- O sniffer captura pacotes do protocolo TCP e apresenta determinados dados da seguinte forma:
+PACOTE  N :
+IP ORIGEM  |  IP DESTINO |    TEMPO   | DADOS CONTIDOS
+xxx.x.x.x  |  xxx.x.x.x  |  HH:MM:SS  |  codificacão UTF-8 de Data
 
 ## Como executar
 
 ```bash
 cd fase1-sniffer
 
-# Terminal 1 — servidor
+# Terminal 1 — sniffer
+sudo python3 sniffer.py
+
+# Terminal 2 — servidor
 python3 server.py
 
-# Terminal 2 — cliente interativo
+# Terminal 3 — cliente interativo
 python3 client.py                        # conecta em 127.0.0.1:9999
 python3 client.py --host 192.168.0.10    # servidor em outra máquina
+
 
 # Ou: roteiro automático (LOGIN → SET → GET → DEL → GET → QUIT),
 # útil para gerar tráfego previsível para o sniffer
 python3 client.py --roteiro
 python3 client.py --roteiro --usuario bob --senha 12345 --pausa 1
+
 ```
 
 Opções do cliente: `--host`, `--porta`, `--roteiro`, `--usuario`, `--senha`, `--pausa` (segundos entre comandos no roteiro). Use `python3 client.py -h` para ver a ajuda.
@@ -106,7 +117,7 @@ Opções do cliente: `--host`, `--porta`, `--roteiro`, `--usuario`, `--senha`, `
 
 - Rosana Schreiner Budant — [@RosanaBudant](https://github.com/RosanaBudant)
 - Luísa Kirsch Silva Zarth — [@LuisaZarth](https://github.com/LuisaZarth)
-- <!-- Nome — @usuario -->
+- Leonardo Nunes Pasa — [@LeoPasa](https://github.com/LeoPasa)
 
 ## Aviso
 
