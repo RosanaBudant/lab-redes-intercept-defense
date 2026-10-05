@@ -132,5 +132,5 @@ Projeto com finalidade exclusivamente acadêmica. As técnicas de interceptaçã
 ## Integrantes
 
 - Rosana Schreiner Budant — [@RosanaBudant](https://github.com/RosanaBudant)
-- Luísa Zarth — [@LuisaZarth](https://github.com/LuisaZarth)
-- Leonardo Pasa — [@LeoPasa](https://github.com/LeoPasa)
+- Luísa Kirsch Silva Zarth — [@LuisaZarth](https://github.com/LuisaZarth)
+- Leonardo Nunes Pasa — [@LeoPasa](https://github.com/LeoPasa)
