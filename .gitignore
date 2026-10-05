@@ -44,3 +44,6 @@ bin/
 # === Sistema operacional ===
 .DS_Store
 Thumbs.db
+captura_sniffer.txt
+server.log
+*.pcap
