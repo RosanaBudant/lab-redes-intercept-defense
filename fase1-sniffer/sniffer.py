@@ -38,6 +38,9 @@ def capturar():
                 "!HH",
                 pacote[inicio_tcp:inicio_tcp + 4])
 
+            if porta_origem != 9999 and porta_destino != 9999:
+                continue
+
 
             data_offset = (pacote[inicio_tcp + 12] >> 4) * 4
 
