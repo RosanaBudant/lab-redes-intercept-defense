@@ -9,16 +9,32 @@ Posiciona-se entre o cliente e o servidor:
 import argparse
 import socket
 import sys
+import threading
 
-HOST_ESCUTA = "0.0.0.0"      # o proxy escuta em todas as interfaces
-PORTA_PROXY = 8888           # porta onde o cliente vai se conectar
-HOST_SERVIDOR = "127.0.0.1"  # onde o servidor real esta
-PORTA_SERVIDOR = 9999        # porta do servidor real
+HOST_ESCUTA = "0.0.0.0"
+PORTA_PROXY = 8888
+HOST_SERVIDOR = "127.0.0.1"
+PORTA_SERVIDOR = 9999
+
+TAMANHO_BUFFER = 4096
+
+
+def repassar(origem, destino, rotulo, encerrar):
+    try:
+        while True:
+            dados = origem.recv(TAMANHO_BUFFER)
+            if not dados:
+                break
+            print(f"    [{rotulo}] {dados!r}", flush=True)
+            destino.sendall(dados)
+    except OSError:
+        pass
+    finally:
+        encerrar.set()
 
 
 def atender(conexao_cliente, endereco_cliente, host_servidor, porta_servidor):
-    """Trata uma conexao: recebe o cliente e abre a ligacao com o servidor."""
-    print(f"[+] Cliente conectado: {endereco_cliente}")
+    print(f"[+] Cliente conectado: {endereco_cliente}", flush=True)
 
     try:
         conexao_servidor = socket.create_connection(
@@ -30,17 +46,37 @@ def atender(conexao_cliente, endereco_cliente, host_servidor, porta_servidor):
         conexao_cliente.close()
         return
 
-    print(f"[+] Conectado ao servidor {host_servidor}:{porta_servidor}")
-    print("[*] (Parte 1) Tunel ainda nao repassa dados - sera feito na Parte 2.")
+    conexao_servidor.settimeout(None)
 
-    # Aqui entra o relay de dados nos dois sentidos.
-    conexao_servidor.close()
+    print(f"[+] Conectado ao servidor {host_servidor}:{porta_servidor}", flush=True)
+    print("[*] Tunel aberto - repassando dados nos dois sentidos.", flush=True)
+
+    encerrar = threading.Event()
+
+    t_envio = threading.Thread(
+        target=repassar,
+        args=(conexao_cliente, conexao_servidor, "cliente -> servidor", encerrar),
+        daemon=True,
+    )
+    t_resposta = threading.Thread(
+        target=repassar,
+        args=(conexao_servidor, conexao_cliente, "servidor -> cliente", encerrar),
+        daemon=True,
+    )
+
+    t_envio.start()
+    t_resposta.start()
+
+    encerrar.wait()
+
     conexao_cliente.close()
-    print(f"[-] Conexao encerrada: {endereco_cliente}")
+    conexao_servidor.close()
+
+    print(f"[-] Conexao encerrada: {endereco_cliente}", flush=True)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Proxy MITM - Fase 2 (Parte 1)")
+    parser = argparse.ArgumentParser(description="Proxy MITM - Fase 2")
     parser.add_argument("--porta", type=int, default=PORTA_PROXY,
                         help=f"porta de escuta do proxy (padrao: {PORTA_PROXY})")
     parser.add_argument("--host-servidor", default=HOST_SERVIDOR,
@@ -49,7 +85,6 @@ def main():
                         help=f"porta do servidor real (padrao: {PORTA_SERVIDOR})")
     args = parser.parse_args()
 
-    # Socket de escuta do proxy
     proxy = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     proxy.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
