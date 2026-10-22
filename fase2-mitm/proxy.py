@@ -9,6 +9,7 @@ import argparse
 import socket
 import sys
 import threading
+from modificacao import modificar
 
 HOST_ESCUTA = "0.0.0.0"
 PORTA_PROXY = 8888
@@ -18,21 +19,45 @@ PORTA_SERVIDOR = 9999
 TAMANHO_BUFFER = 4096
 
 
-def repassar(origem, destino, rotulo, encerrar):
+def repassar(origem, destino, rotulo, encerrar, alterar=True):
+    buffer = b""
     try:
         while True:
             dados = origem.recv(TAMANHO_BUFFER)
             if not dados:
                 break
-            print(f"    [{rotulo}] {dados!r}", flush=True)
-            destino.sendall(dados)
-    except OSError:
-        pass
+
+            if rotulo != "cliente -> servidor" or not alterar:
+                print(f"    [{rotulo}] {dados!r}", flush=True)
+                destino.sendall(dados)
+            else:
+                buffer += dados
+                while b"\n" in buffer:
+                    mensagem, buffer = buffer.split(b"\n", 1)
+                    mensagem += b"\n"
+                    texto = mensagem.decode("utf-8", errors="surrogateescape")
+                    alterada = modificar(texto)
+                    dados_encaminhados = alterada.encode(
+                        "utf-8", errors="surrogateescape"
+                    )
+
+                    if alterada != texto:
+                        print(f"    [INTERCEPTADO] {texto.rstrip()!r}", flush=True)
+                        print(f"    [ALTERADO]     {alterada.rstrip()!r}", flush=True)
+                    else:
+                        print(f"    [{rotulo}] {mensagem!r}", flush=True)
+
+                    destino.sendall(dados_encaminhados)
+
+        if buffer:
+            destino.sendall(buffer)
+    except OSError as e:
+        print(f"[!] Erro no repasse ({rotulo}): {e}", flush=True)
     finally:
         encerrar.set()
 
 
-def atender(conexao_cliente, endereco_cliente, host_servidor, porta_servidor):
+def atender(conexao_cliente, endereco_cliente, host_servidor, porta_servidor, alterar=True):
     print(f"[+] Cliente conectado: {endereco_cliente}", flush=True)
 
     try:
@@ -54,7 +79,7 @@ def atender(conexao_cliente, endereco_cliente, host_servidor, porta_servidor):
 
     t_envio = threading.Thread(
         target=repassar,
-        args=(conexao_cliente, conexao_servidor, "cliente -> servidor", encerrar),
+        args=(conexao_cliente, conexao_servidor, "cliente -> servidor", encerrar, alterar),
         daemon=True,
     )
     t_resposta = threading.Thread(
@@ -82,6 +107,8 @@ def main():
                         help=f"host do servidor real (padrao: {HOST_SERVIDOR})")
     parser.add_argument("--porta-servidor", type=int, default=PORTA_SERVIDOR,
                         help=f"porta do servidor real (padrao: {PORTA_SERVIDOR})")
+    parser.add_argument("--transparente", action="store_true",
+                        help="repassa os bytes sem aplicar a modificacao de demonstracao")
     args = parser.parse_args()
 
     proxy = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -98,13 +125,20 @@ def main():
     print(f"[*] Proxy escutando em {HOST_ESCUTA}:{args.porta}")
     print(f"[*] Encaminhando para o servidor "
           f"{args.host_servidor}:{args.porta_servidor}")
+    if args.transparente:
+        print("[*] Modo transparente: mensagens nao serao alteradas.")
+    else:
+        print("[*] Modo demonstracao: SET cor azul sera alterado para vermelho.")
     print("[*] Aguardando conexoes... (Ctrl+C para encerrar)")
 
     try:
         while True:
             conexao_cliente, endereco_cliente = proxy.accept()
-            atender(conexao_cliente, endereco_cliente,
-                    args.host_servidor, args.porta_servidor)
+            atender(conexao_cliente,                    
+                    endereco_cliente,
+                    args.host_servidor, 
+                    args.porta_servidor,
+                    alterar=not args.transparente)
     except KeyboardInterrupt:
         print("\n[*] Encerrando o proxy.")
     finally:

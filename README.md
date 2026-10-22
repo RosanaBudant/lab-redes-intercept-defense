@@ -54,22 +54,36 @@ Proxy *man-in-the-middle* que se posiciona entre o cliente e o servidor
 | Componente | Arquivo | Status |
 |------------|---------|--------|
 | Proxy transparente (túnel) | `fase2-mitm/proxy.py` | ✅ Feito |
-| Modificação de mensagens + demonstração | — | ⏳ Pendente |
+| Modificação de mensagens + demonstração | `fase2-mitm/modificacao.py` | ✅ Feito |
 | Concorrência (múltiplas conexões) + robustez | — | ⏳ Pendente |
 | Documento de concorrência + topologia de redirecionamento | — | ⏳ Pendente |
 
 O proxy escuta na porta **8888** e encaminha para o servidor na **9999**.
-Para testar, basta apontar o cliente ao proxy:
+Para testar o túnel sem alteração, basta apontar o cliente ao proxy:
 
 ```bash
 # Terminal 1 — servidor
 cd fase1-sniffer && python3 server.py
 
-# Terminal 2 — proxy
-cd fase2-mitm && python3 proxy.py
+# Terminal 2 — proxy (modo túnel, sem alteração)
+cd fase2-mitm && python3 proxy.py --transparente
 
 # Terminal 3 — cliente apontando para o proxy
 cd fase1-sniffer && python3 client.py --porta 8888
+```
+
+No modo padrão, o proxy altera `SET cor azul` para `SET cor vermelho`.
+Inicie-o sem `--transparente` e rode o cliente com o roteiro:
+
+```bash
+cd fase1-sniffer && python3 client.py --porta 8888 --roteiro --pausa 0
+```
+
+O cliente deve receber `OK vermelho`; o proxy registra a mensagem interceptada
+e a alterada. Para capturar a evidência no Wireshark, inicie antes o `tcpdump`:
+
+```bash
+sudo tcpdump -i lo -w evidencia_bloco_b.pcap 'tcp port 8888 or tcp port 9999'
 ```
 
 ## Requisitos
