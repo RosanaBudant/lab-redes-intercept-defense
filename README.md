@@ -9,7 +9,7 @@ O projeto explora, em três fases, como um protocolo de aplicação em texto cla
 | Fase | Tema | Entrega | Status |
 |------|------|---------|--------|
 | 1 | Aplicação alvo + sniffer de tráfego (escuta passiva) | 05/10/2026 | ✅ Concluída |
-| 2 | Proxy MITM concorrente | 26/10/2026 | ⏳ Pendente |
+| 2 | Proxy MITM concorrente | 26/10/2026 | 🚧 Em andamento |
 | 3 | Defesa (TLS) e detecção | 23/11/2026 | ⏳ Pendente |
 
 ## Fase 1 — Aplicação alvo e sniffer
@@ -45,6 +45,32 @@ O enunciado pede, no mínimo, três máquinas: cliente, servidor e observador. C
 - **Sniffer** (papel da VM-observador): abre um *raw socket* (`AF_PACKET`/`SOCK_RAW`), lê os quadros da `lo`, decodifica os cabeçalhos IP e TCP e exibe o conteúdo da aplicação. Precisa de privilégio de root (`sudo`).
 
 Observação sobre o loopback: cada mensagem aparece **duas vezes** na captura, porque a interface de loopback entrega o mesmo pacote no envio e na recepção. Isso é comportamento normal do `lo`, não duplicação de dados pelo programa.
+
+## Fase 2 — Proxy MITM (em andamento)
+
+Proxy *man-in-the-middle* que se posiciona entre o cliente e o servidor
+(cliente → proxy → servidor) e repassa o tráfego nos dois sentidos.
+
+| Componente | Arquivo | Status |
+|------------|---------|--------|
+| Proxy transparente (túnel) | `fase2-mitm/proxy.py` | ✅ Feito |
+| Modificação de mensagens + demonstração | — | ⏳ Pendente |
+| Concorrência (múltiplas conexões) + robustez | — | ⏳ Pendente |
+| Documento de concorrência + topologia de redirecionamento | — | ⏳ Pendente |
+
+O proxy escuta na porta **8888** e encaminha para o servidor na **9999**.
+Para testar, basta apontar o cliente ao proxy:
+
+```bash
+# Terminal 1 — servidor
+cd fase1-sniffer && python3 server.py
+
+# Terminal 2 — proxy
+cd fase2-mitm && python3 proxy.py
+
+# Terminal 3 — cliente apontando para o proxy
+cd fase1-sniffer && python3 client.py --porta 8888
+```
 
 ## Requisitos
 
