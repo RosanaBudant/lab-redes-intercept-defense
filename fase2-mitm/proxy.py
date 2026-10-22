@@ -1,6 +1,5 @@
 """
 Proxy MITM (man-in-the-middle) - Fase 2
-Bloco A: proxy transparente (tunel).
 
 Posiciona-se entre o cliente e o servidor:
   cliente  ->  proxy (porta 8888)  ->  servidor (porta 9999)
