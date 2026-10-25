@@ -134,11 +134,19 @@ def main():
     try:
         while True:
             conexao_cliente, endereco_cliente = proxy.accept()
-            atender(conexao_cliente,                    
-                    endereco_cliente,
-                    args.host_servidor, 
-                    args.porta_servidor,
-                    alterar=not args.transparente)
+
+            thread_cliente = threading.Thread(target=atender, # atender precisa ser uma thread daemon
+                args=(
+                conexao_cliente,
+                endereco_cliente,
+                args.host_servidor,
+                args.porta_servidor
+                ),
+                kwargs={"alterar": not args.transparente},
+                daemon=True
+            )
+
+            thread_cliente.start()
     except KeyboardInterrupt:
         print("\n[*] Encerrando o proxy.")
     finally:
