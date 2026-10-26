@@ -9,14 +9,14 @@ O projeto explora, em três fases, como um protocolo de aplicação em texto cla
 | Fase | Tema | Entrega | Status |
 |------|------|---------|--------|
 | 1 | Aplicação alvo + sniffer de tráfego (escuta passiva) | 05/10/2026 | ✅ Concluída |
-| 2 | Proxy MITM concorrente | 26/10/2026 | 🚧 Em andamento |
+| 2 | Proxy MITM concorrente | 26/10/2026 | ✅ Concluída |
 | 3 | Defesa (TLS) e detecção | 23/11/2026 | ⏳ Pendente |
 
 ## Fase 1 — Aplicação alvo e sniffer
 
 | Componente | Arquivo | Descrição |
 |------------|---------|-----------|
-| Servidor | `fase1-sniffer/server.py` | Servidor TCP do protocolo (porta 9999) |
+| Servidor | `fase1-sniffer/server.py` | Servidor TCP do protocolo (porta 9999), concorrente |
 | Cliente | `fase1-sniffer/client.py` | Cliente interativo ou roteiro automático |
 | Sniffer | `fase1-sniffer/sniffer.py` | Interceptador passivo em *raw socket* |
 | Captura (auto) | `fase1-sniffer/capturar.sh` | Roda servidor + sniffer + cliente e grava a saída do sniffer |
@@ -46,45 +46,87 @@ O enunciado pede, no mínimo, três máquinas: cliente, servidor e observador. C
 
 Observação sobre o loopback: cada mensagem aparece **duas vezes** na captura, porque a interface de loopback entrega o mesmo pacote no envio e na recepção. Isso é comportamento normal do `lo`, não duplicação de dados pelo programa.
 
-## Fase 2 — Proxy MITM (em andamento)
+## Fase 2 — Proxy MITM concorrente
 
-Proxy *man-in-the-middle* que se posiciona entre o cliente e o servidor
-(cliente → proxy → servidor) e repassa o tráfego nos dois sentidos.
+Proxy *man-in-the-middle* (MITM) que se posiciona entre o cliente e o servidor, repassa o tráfego nos dois sentidos, consegue **alterar mensagens em trânsito** e atende **várias conexões simultâneas**. Demonstra a quebra de integridade e de autenticação: o conteúdo pode ser adulterado sem que cliente ou servidor percebam.
 
-| Componente | Arquivo | Status |
-|------------|---------|--------|
-| Proxy transparente (túnel) | `fase2-mitm/proxy.py` | ✅ Feito |
-| Modificação de mensagens + demonstração | `fase2-mitm/modificacao.py` | ✅ Feito |
-| Concorrência (múltiplas conexões) + robustez | — | ⏳ Pendente |
-| Documento de concorrência + topologia de redirecionamento | — | ⏳ Pendente |
+### Topologia de redirecionamento
 
-O proxy escuta na porta **8888** e encaminha para o servidor na **9999**.
-Para testar o túnel sem alteração, basta apontar o cliente ao proxy:
+O redirecionamento é feito por configuração do próprio cliente: em vez de conectar direto no servidor (porta 9999), o cliente é apontado para o proxy (porta 8888). O proxy abre a conexão com o servidor real e repassa tudo. Nem o cliente nem o servidor sabem que há um intermediário no caminho.
+
+```
+   +----------+        +-----------------+        +-----------+
+   | cliente  | -----> |  proxy MITM     | -----> | servidor  |
+   |          |  :8888 |  (intercepta e  |  :9999 |           |
+   |          | <----- |   altera)       | <----- |           |
+   +----------+        +-----------------+        +-----------+
+   client.py           fase2-mitm/proxy.py        server.py
+   --porta 8888
+```
+
+| Componente | Arquivo | Porta | Papel |
+|------------|---------|:-----:|-------|
+| Servidor | `fase1-sniffer/server.py` | 9999 | Servidor real do protocolo (concorrente) |
+| Proxy MITM | `fase2-mitm/proxy.py` | 8888 | Intermediário que repassa e altera o tráfego |
+| Cliente | `fase1-sniffer/client.py` | — | Apontado ao proxy com `--porta 8888` |
+| Modificação | `fase2-mitm/modificacao.py` | — | Lógica de alteração das mensagens |
+| Teste de carga (Python) | `fase2-mitm/teste_carga.py` | — | Dispara N clientes simultâneos e conta sucessos/falhas |
+| Teste de carga (shell) | `fase2-mitm/teste_de_carga.sh` | — | Sobe servidor+proxy, dispara clientes e encerra tudo |
+| Concorrência (doc) | `fase2-mitm/CONCORRENCIA.md` | — | Modelo de concorrência e regiões críticas |
+
+### Como executar
 
 ```bash
 # Terminal 1 — servidor
 cd fase1-sniffer && python3 server.py
 
-# Terminal 2 — proxy (modo túnel, sem alteração)
-cd fase2-mitm && python3 proxy.py --transparente
+# Terminal 2 — proxy
+cd fase2-mitm && python3 proxy.py
 
 # Terminal 3 — cliente apontando para o proxy
 cd fase1-sniffer && python3 client.py --porta 8888
 ```
 
-No modo padrão, o proxy altera `SET cor azul` para `SET cor vermelho`.
-Inicie-o sem `--transparente` e rode o cliente com o roteiro:
+### Demonstração da modificação
 
-```bash
-cd fase1-sniffer && python3 client.py --porta 8888 --roteiro --pausa 0
+Com o proxy em modo demonstração (padrão), toda mensagem `SET cor azul` é trocada por `SET cor vermelho` antes de chegar ao servidor. No cliente:
+
+```
+LOGIN alice senha123
+SET cor azul
+GET cor
 ```
 
-O cliente deve receber `OK vermelho`; o proxy registra a mensagem interceptada
-e a alterada. Para capturar a evidência no Wireshark, inicie antes o `tcpdump`:
+O `GET cor` responde `OK vermelho` — o cliente mandou azul, o servidor guardou vermelho, e ninguém foi avisado. No terminal do proxy aparecem as linhas `[INTERCEPTADO]` e `[ALTERADO]` registrando a adulteração.
+
+Para rodar o proxy apenas repassando, sem alterar nada, use:
 
 ```bash
-sudo tcpdump -i lo -w evidencia_bloco_b.pcap 'tcp port 8888 or tcp port 9999'
+python3 proxy.py --sem-alterar
 ```
+
+### Teste de concorrência
+
+Há dois testes de carga, com abordagens diferentes:
+
+**`teste_carga.py` (principal)** — dispara 20 clientes simultâneos, cada um com chave e valor distintos (cor0/valor0, cor1/valor1, ...), e imprime um resumo com sucessos, falhas e tempo. **Requer o servidor e o proxy já rodando** (Terminais 1 e 2) e os deixa no ar ao terminar — bom para rodar várias vezes seguidas:
+
+```bash
+# com o servidor e o proxy já rodando:
+cd fase2-mitm && python3 teste_carga.py                # 20 clientes simultaneos
+cd fase2-mitm && python3 teste_carga.py --clientes 50  # mais clientes
+```
+
+Saída esperada: `Atendidos com sucesso: 20 / Falharam: 0`.
+
+**`teste_de_carga.sh` (alternativo)** — **sobe o servidor e o proxy automaticamente**, dispara alguns clientes com o roteiro padrão, grava a saída de cada um em arquivos de log e **encerra tudo ao final** (teste autossuficiente, um comando só):
+
+```bash
+cd fase2-mitm && bash teste_de_carga.sh
+# confira depois: cat client_1.log
+```
+
+O modelo de concorrência e as regiões críticas estão descritos em `fase2-mitm/CONCORRENCIA.md`.
 
 ## Requisitos
 
@@ -126,7 +168,7 @@ Regra geral: respostas que começam com `OK` indicam sucesso; `Erro!` indica fal
 
 Usuários de teste fixos no código: `alice` / `senha123` e `bob` / `12345`. Os dados ficam em memória e se perdem ao reiniciar o servidor.
 
-## Como executar
+## Como executar (Fase 1)
 
 ### Opção A — manual, com três terminais
 
