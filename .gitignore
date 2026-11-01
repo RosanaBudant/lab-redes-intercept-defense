@@ -47,3 +47,11 @@ Thumbs.db
 captura_sniffer.txt
 server.log
 *.pcap
+*.key
+servidor.key
+
+# Fase 3 - chaves privadas e certificados de teste
+*.key
+fase3-defense/impostor.*
+fase3-defense/servidor_impostor.py
+!fase3-defense/servidor.crt

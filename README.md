@@ -10,21 +10,19 @@ O projeto explora, em três fases, como um protocolo de aplicação em texto cla
 |------|------|---------|--------|
 | 1 | Aplicação alvo + sniffer de tráfego (escuta passiva) | 05/10/2026 | ✅ Concluída |
 | 2 | Proxy MITM concorrente | 26/10/2026 | ✅ Concluída |
-| 3 | Defesa (TLS) e detecção | 23/11/2026 | ⏳ Pendente |
+| 3 | Defesa (TLS) e detecção | 23/11/2026 | 🚧 Em andamento |
 
-## Fase 1 — Aplicação alvo e sniffer
+## Requisitos
 
-| Componente | Arquivo | Descrição |
-|------------|---------|-----------|
-| Servidor | `fase1-sniffer/server.py` | Servidor TCP do protocolo (porta 9999), concorrente |
-| Cliente | `fase1-sniffer/client.py` | Cliente interativo ou roteiro automático |
-| Sniffer | `fase1-sniffer/sniffer.py` | Interceptador passivo em *raw socket* |
-| Captura (auto) | `fase1-sniffer/capturar.sh` | Roda servidor + sniffer + cliente e grava a saída do sniffer |
-| Evidência pcap | `fase1-sniffer/capturar_pcap.sh` | Gera `evidencia.pcap` (via tcpdump) para abrir no Wireshark |
+- Python 3 (somente biblioteca padrão, sem dependências externas).
+- Linux com privilégio de root para o sniffer (*raw socket*). No Codespace, `sudo` já está disponível.
+- `tcpdump` para gerar o `.pcap` da evidência (`sudo apt install tcpdump`).
+- Wireshark (em qualquer máquina) para abrir o `.pcap`.
+- OpenSSL para gerar o certificado da Fase 3.
 
-## Topologia de testes
+## Ambiente de testes
 
-O enunciado pede, no mínimo, três máquinas: cliente, servidor e observador. Conforme combinado com a professora, o grupo montou esse ambiente dentro de um único **GitHub Codespace**, usando **três terminais** em vez de três VMs. Os três processos rodam na mesma máquina e se comunicam pela interface de *loopback* (`lo`, `127.0.0.1`), que é por onde o sniffer captura o tráfego.
+O enunciado pede, no mínimo, três máquinas: cliente, servidor e observador. Conforme combinado com a professora, o grupo montou esse ambiente dentro de um único **GitHub Codespace**, usando **vários terminais** em vez de VMs separadas. Os processos rodam na mesma máquina e se comunicam pela interface de *loopback* (`lo`, `127.0.0.1`).
 
 ```
           GitHub Codespace (um container Linux)
@@ -36,19 +34,105 @@ O enunciado pede, no mínimo, três máquinas: cliente, servidor e observador. C
   |  +----+----+         +----+----+    +----^----+  |
   |       |                   |              |       |
   |       +--- interface loopback (lo) ------+       |
-  |              127.0.0.1  -  tudo em texto claro   |
+  |              127.0.0.1                           |
   +-------------------------------------------------+
 ```
 
-- **Servidor** (papel da VM-servidor): escuta em `0.0.0.0:9999`.
-- **Cliente** (papel da VM-cliente): conecta em `127.0.0.1:9999`.
-- **Sniffer** (papel da VM-observador): abre um *raw socket* (`AF_PACKET`/`SOCK_RAW`), lê os quadros da `lo`, decodifica os cabeçalhos IP e TCP e exibe o conteúdo da aplicação. Precisa de privilégio de root (`sudo`).
-
 Observação sobre o loopback: cada mensagem aparece **duas vezes** na captura, porque a interface de loopback entrega o mesmo pacote no envio e na recepção. Isso é comportamento normal do `lo`, não duplicação de dados pelo programa.
+
+## Protocolo de aplicação
+
+Protocolo texto claro sobre TCP, porta **9999/tcp**. Cada mensagem é uma linha terminada em `\n`, nos dois sentidos. É um repositório chave-valor com login simples — duas das sugestões do enunciado combinadas (login/autenticação simples e repositório chave-valor).
+
+### Comandos (cliente -> servidor)
+
+| Comando | Descrição | Exige login |
+|---------|-----------|:-----------:|
+| `LOGIN usuario senha` | Autentica a sessão | — |
+| `SET chave valor` | Grava um par chave/valor (o valor pode conter espaços) | sim |
+| `GET chave` | Consulta o valor de uma chave | sim |
+| `DEL chave` | Remove uma chave | sim |
+| `QUIT` | Encerra a conexão | sim |
+
+Os comandos não diferenciam maiúsculas de minúsculas (`get` = `GET`).
+
+### Respostas (servidor -> cliente)
+
+| Resposta | Quando |
+|----------|--------|
+| `OK` | `LOGIN`, `SET` ou `DEL` com sucesso |
+| `OK valor` | `GET` encontrou a chave |
+| `OK tchauzinho;)` | `QUIT` — o servidor fecha a conexão em seguida |
+| `Erro! Login invalido` | Usuário ou senha incorretos |
+| `Erro! Nao autenticado` | Comando enviado antes de um `LOGIN` |
+| `Erro! Chave nao encontrada` | `GET` de chave inexistente |
+| `Erro! Argumentos invalidos` | Número de argumentos errado |
+| `Erro! Comando desconhecido` | Comando não reconhecido |
+
+Regra geral: respostas que começam com `OK` indicam sucesso; `Erro!` indica falha.
+
+Usuários de teste fixos no código: `alice` / `senha123` e `bob` / `12345`. Os dados ficam em memória e se perdem ao reiniciar o servidor. (Na Fase 3, as senhas são armazenadas com hash, não em texto claro.)
+
+---
+
+## Fase 1 — Aplicação alvo e sniffer
+
+Demonstra a **quebra de confidencialidade**: um sniffer passivo em *raw socket* lê o tráfego em texto claro, incluindo credenciais e valores.
+
+| Componente | Arquivo | Descrição |
+|------------|---------|-----------|
+| Servidor | `fase1-sniffer/server.py` | Servidor TCP do protocolo (porta 9999), concorrente |
+| Cliente | `fase1-sniffer/client.py` | Cliente interativo ou roteiro automático |
+| Sniffer | `fase1-sniffer/sniffer.py` | Interceptador passivo em *raw socket* |
+| Captura (auto) | `fase1-sniffer/capturar.sh` | Roda servidor + sniffer + cliente e grava a saída do sniffer |
+| Evidência pcap | `fase1-sniffer/capturar_pcap.sh` | Gera `evidencia.pcap` (via tcpdump) para abrir no Wireshark |
+
+O sniffer abre um *raw socket* (`AF_PACKET`/`SOCK_RAW`), lê os quadros da `lo`, decodifica os cabeçalhos IP e TCP e exibe o conteúdo da aplicação. Precisa de privilégio de root (`sudo`).
+
+### Como executar
+
+**Opção A — manual, com três terminais:**
+
+```bash
+cd fase1-sniffer
+
+# Terminal 1 — servidor
+python3 server.py
+
+# Terminal 2 — sniffer (precisa de root)
+sudo python3 sniffer.py
+
+# Terminal 3 — cliente
+python3 client.py --roteiro      # sequencia automatica LOGIN->SET->GET->DEL->QUIT
+# ou:
+python3 client.py                # modo interativo
+```
+
+Com o sniffer ligado no Terminal 2, ao rodar o cliente no Terminal 3 as credenciais e os valores aparecem em texto claro na tela do sniffer — demonstrando a quebra de confidencialidade.
+
+**Opção B — automático (um terminal):**
+
+```bash
+cd fase1-sniffer
+bash capturar.sh
+```
+
+Sobe o servidor, liga o sniffer, roda o cliente e encerra tudo na ordem certa, gravando a saída do sniffer em `captura_sniffer.txt`.
+
+**Gerar a evidência para o Wireshark:**
+
+```bash
+cd fase1-sniffer
+bash capturar_pcap.sh
+```
+
+Gera `evidencia.pcap`. Baixe o arquivo e abra no Wireshark; aplique o filtro `tcp.port == 9999` e use **Follow -> TCP Stream** para ver a conversa em texto claro.
+
+---
 
 ## Fase 2 — Proxy MITM concorrente
 
-Proxy *man-in-the-middle* (MITM) que se posiciona entre o cliente e o servidor, repassa o tráfego nos dois sentidos, consegue **alterar mensagens em trânsito** e atende **várias conexões simultâneas**. Demonstra a quebra de integridade e de autenticação: o conteúdo pode ser adulterado sem que cliente ou servidor percebam.
+Demonstra a **quebra de integridade**: um proxy *man-in-the-middle* se posiciona entre o cliente e o servidor, repassa o tráfego nos dois sentidos, **altera mensagens em trânsito** e atende **várias conexões simultâneas**. O conteúdo é adulterado sem que cliente ou servidor percebam.
 
 ### Topologia de redirecionamento
 
@@ -99,17 +183,13 @@ GET cor
 
 O `GET cor` responde `OK vermelho` — o cliente mandou azul, o servidor guardou vermelho, e ninguém foi avisado. No terminal do proxy aparecem as linhas `[INTERCEPTADO]` e `[ALTERADO]` registrando a adulteração.
 
-Para rodar o proxy apenas repassando, sem alterar nada, use:
-
-```bash
-python3 proxy.py --sem-alterar
-```
+Para rodar o proxy apenas repassando, sem alterar nada, use `python3 proxy.py --sem-alterar`.
 
 ### Teste de concorrência
 
 Há dois testes de carga, com abordagens diferentes:
 
-**`teste_carga.py` (principal)** — dispara 20 clientes simultâneos, cada um com chave e valor distintos (cor0/valor0, cor1/valor1, ...), e imprime um resumo com sucessos, falhas e tempo. **Requer o servidor e o proxy já rodando** (Terminais 1 e 2) e os deixa no ar ao terminar — bom para rodar várias vezes seguidas:
+**`teste_carga.py` (principal)** — dispara 20 clientes simultâneos, cada um com chave e valor distintos (cor0/valor0, cor1/valor1, ...), e imprime um resumo com sucessos, falhas e tempo. **Requer o servidor e o proxy já rodando** e os deixa no ar ao terminar:
 
 ```bash
 # com o servidor e o proxy já rodando:
@@ -119,7 +199,7 @@ cd fase2-mitm && python3 teste_carga.py --clientes 50  # mais clientes
 
 Saída esperada: `Atendidos com sucesso: 20 / Falharam: 0`.
 
-**`teste_de_carga.sh` (alternativo)** — **sobe o servidor e o proxy automaticamente**, dispara alguns clientes com o roteiro padrão, grava a saída de cada um em arquivos de log e **encerra tudo ao final** (teste autossuficiente, um comando só):
+**`teste_de_carga.sh` (alternativo)** — **sobe o servidor e o proxy automaticamente**, dispara alguns clientes com o roteiro padrão, grava a saída de cada um em arquivos de log e **encerra tudo ao final**:
 
 ```bash
 cd fase2-mitm && bash teste_de_carga.sh
@@ -128,84 +208,33 @@ cd fase2-mitm && bash teste_de_carga.sh
 
 O modelo de concorrência e as regiões críticas estão descritos em `fase2-mitm/CONCORRENCIA.md`.
 
-## Requisitos
+---
 
-- Python 3 (somente biblioteca padrão, sem dependências externas).
-- Linux com privilégio de root para o sniffer (*raw socket*). No Codespace, `sudo` já está disponível.
-- `tcpdump` para gerar o `.pcap` da evidência (`sudo apt install tcpdump`).
-- Wireshark (em qualquer máquina) para abrir o `.pcap`.
+## Fase 3 — Defesa com TLS e autenticação
 
-## Protocolo de aplicação
+Neutraliza os ataques das fases anteriores: o canal passa a usar **TLS**, o servidor é **autenticado por certificado** e as senhas são guardadas com **hash**. O sniffer da Fase 1 deixa de ler o conteúdo e o proxy da Fase 2 deixa de conseguir alterar as mensagens.
 
-Protocolo texto claro sobre TCP, porta **9999/tcp**. Cada mensagem é uma linha terminada em `\n`, nos dois sentidos. É um repositório chave-valor com login simples — duas das sugestões do enunciado combinadas.
+| Componente | Arquivo | Descrição |
+|------------|---------|-----------|
+| Servidor TLS | `fase3-defense/servidor_tls.py` | Servidor protegido (TLS + senhas com hash) |
+| Cliente TLS | `fase3-defense/cliente_tls.py` | Cliente que valida o certificado do servidor |
+| Sniffer adaptado | `fase3-defense/sniffer_tls.py` | Mostra `[TEXTO]` ou `[CIFRADO]` (prova antes/depois) |
+| Certificado | `fase3-defense/servidor.crt` | Certificado público (a chave privada não é versionada) |
+| Documentação | `fase3-defense/DEFESA_TLS.md` | Geração de certificado, execução e provas da defesa |
 
-### Comandos (cliente -> servidor)
-
-| Comando | Descrição | Exige login |
-|---------|-----------|:-----------:|
-| `LOGIN usuario senha` | Autentica a sessão | — |
-| `SET chave valor` | Grava um par chave/valor (o valor pode conter espaços) | sim |
-| `GET chave` | Consulta o valor de uma chave | sim |
-| `DEL chave` | Remove uma chave | sim |
-| `QUIT` | Encerra a conexão | sim |
-
-Os comandos não diferenciam maiúsculas de minúsculas (`get` = `GET`).
-
-### Respostas (servidor -> cliente)
-
-| Resposta | Quando |
-|----------|--------|
-| `OK` | `LOGIN`, `SET` ou `DEL` com sucesso |
-| `OK valor` | `GET` encontrou a chave |
-| `OK tchauzinho;)` | `QUIT` — o servidor fecha a conexão em seguida |
-| `Erro! Login invalido` | Usuário ou senha incorretos |
-| `Erro! Nao autenticado` | Comando enviado antes de um `LOGIN` |
-| `Erro! Chave nao encontrada` | `GET` de chave inexistente |
-| `Erro! Argumentos invalidos` | Número de argumentos errado |
-| `Erro! Comando desconhecido` | Comando não reconhecido |
-
-Regra geral: respostas que começam com `OK` indicam sucesso; `Erro!` indica falha.
-
-Usuários de teste fixos no código: `alice` / `senha123` e `bob` / `12345`. Os dados ficam em memória e se perdem ao reiniciar o servidor.
-
-## Como executar (Fase 1)
-
-### Opção A — manual, com três terminais
+### Como executar (serviço protegido)
 
 ```bash
-cd fase1-sniffer
+# Terminal 1 — servidor TLS
+cd fase3-defense && python3 servidor_tls.py
 
-# Terminal 1 — servidor
-python3 server.py
-
-# Terminal 2 — sniffer (precisa de root)
-sudo python3 sniffer.py
-
-# Terminal 3 — cliente
-python3 client.py --roteiro      # sequencia automatica LOGIN->SET->GET->DEL->QUIT
-# ou:
-python3 client.py                # modo interativo
+# Terminal 2 — cliente TLS
+cd fase3-defense && python3 cliente_tls.py
 ```
 
-Com o sniffer ligado no Terminal 2, ao rodar o cliente no Terminal 3 as credenciais e os valores aparecem em texto claro na tela do sniffer — demonstrando a quebra de confidencialidade.
+Ao conectar, o cliente informa a cifra TLS negociada e que o servidor foi autenticado pelo certificado. A geração do certificado e as demonstrações da defesa (sniffer que não lê mais, impostor recusado e proxy MITM neutralizado) estão em `fase3-defense/DEFESA_TLS.md`.
 
-### Opção B — automático (um terminal)
-
-```bash
-cd fase1-sniffer
-bash capturar.sh
-```
-
-Sobe o servidor, liga o sniffer, roda o cliente e encerra tudo na ordem certa, gravando a saída do sniffer em `captura_sniffer.txt`.
-
-### Gerar a evidência para o Wireshark
-
-```bash
-cd fase1-sniffer
-bash capturar_pcap.sh
-```
-
-Gera `evidencia.pcap`. Baixe o arquivo e abra no Wireshark; aplique o filtro `tcp.port == 9999` e use **Follow -> TCP Stream** para ver a conversa em texto claro.
+---
 
 ## Aviso
 
