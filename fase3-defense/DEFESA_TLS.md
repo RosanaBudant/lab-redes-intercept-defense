@@ -9,8 +9,8 @@ senhas armazenadas com hash. Neutraliza os ataques das Fases 1 (sniffer) e
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `servidor_tls.py` | Servidor do protocolo protegido com TLS (porta 9999) |
-| `cliente_tls.py` | Cliente TLS que valida o certificado do servidor |
+| `server_tls.py` | Servidor do protocolo protegido com TLS (porta 9999) |
+| `client_tls.py` | Cliente TLS que valida o certificado do servidor |
 | `sniffer_tls.py` | Sniffer adaptado: mostra `[TEXTO]` ou `[CIFRADO]`, para a prova antes/depois |
 | `servidor.crt` | Certificado público do servidor (pode ser versionado) |
 | `servidor.key` | Chave privada do servidor — **NÃO** vai para o Git (gerada localmente) |
@@ -49,10 +49,10 @@ openssl x509 -in servidor.crt -noout -ext subjectAltName
 
 ```bash
 # Terminal 1 — servidor TLS
-cd fase3-defense && python3 servidor_tls.py
+cd fase3-defense && python3 server_tls.py
 
 # Terminal 2 — cliente TLS
-cd fase3-defense && python3 cliente_tls.py
+cd fase3-defense && python3 client_tls.py
 ```
 
 Ao conectar, o cliente informa a cifra negociada (ex.: `TLS_AES_256_GCM_SHA384
@@ -97,11 +97,11 @@ O sniffer mostra `[TEXTO] 'LOGIN alice senha123'` — conteúdo legível.
 **Depois (com TLS)** — servidor e cliente protegidos:
 ```bash
 # T1
-cd fase3-defense && python3 servidor_tls.py
+cd fase3-defense && python3 server_tls.py
 # T2
 cd fase3-defense && sudo python3 sniffer_tls.py
 # T3
-cd fase3-defense && python3 cliente_tls.py
+cd fase3-defense && python3 client_tls.py
 ```
 O sniffer mostra `[CIFRADO] 16 03 01 ...` — bytes do TLS, ilegíveis.
 
@@ -122,11 +122,11 @@ Com o cliente apontando ao proxy da Fase 2 (porta 8888) e o proxy encaminhando
 ao servidor TLS (9999):
 ```bash
 # T1
-cd fase3-defense && python3 servidor_tls.py
+cd fase3-defense && python3 server_tls.py
 # T2
 cd fase2-mitm && python3 proxy.py
 # T3
-cd fase3-defense && python3 cliente_tls.py --porta 8888
+cd fase3-defense && python3 client_tls.py --porta 8888
 ```
 O proxy passa a ver apenas bytes cifrados do handshake TLS (não mais
 `[INTERCEPTADO] SET cor azul`), e a tentativa de interceptação resulta em falha
