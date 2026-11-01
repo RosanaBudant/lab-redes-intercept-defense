@@ -216,7 +216,7 @@ Neutraliza os ataques das fases anteriores: o canal passa a usar **TLS**, o serv
 
 | Componente | Arquivo | Descrição |
 |------------|---------|-----------|
-| Servidor TLS | `fase3-defense/serer_tls.py` | Servidor protegido (TLS + senhas com hash) |
+| Servidor TLS | `fase3-defense/server_tls.py` | Servidor protegido (TLS + senhas com hash) |
 | Cliente TLS | `fase3-defense/client_tls.py` | Cliente que valida o certificado do servidor |
 | Sniffer adaptado | `fase3-defense/sniffer_tls.py` | Mostra `[TEXTO]` ou `[CIFRADO]` (prova antes/depois) |
 | Certificado | `fase3-defense/servidor.crt` | Certificado público (a chave privada não é versionada) |
