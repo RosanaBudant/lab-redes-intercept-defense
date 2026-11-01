@@ -216,8 +216,8 @@ Neutraliza os ataques das fases anteriores: o canal passa a usar **TLS**, o serv
 
 | Componente | Arquivo | Descrição |
 |------------|---------|-----------|
-| Servidor TLS | `fase3-defense/servidor_tls.py` | Servidor protegido (TLS + senhas com hash) |
-| Cliente TLS | `fase3-defense/cliente_tls.py` | Cliente que valida o certificado do servidor |
+| Servidor TLS | `fase3-defense/serer_tls.py` | Servidor protegido (TLS + senhas com hash) |
+| Cliente TLS | `fase3-defense/client_tls.py` | Cliente que valida o certificado do servidor |
 | Sniffer adaptado | `fase3-defense/sniffer_tls.py` | Mostra `[TEXTO]` ou `[CIFRADO]` (prova antes/depois) |
 | Certificado | `fase3-defense/servidor.crt` | Certificado público (a chave privada não é versionada) |
 | Documentação | `fase3-defense/DEFESA_TLS.md` | Geração de certificado, execução e provas da defesa |
@@ -226,10 +226,10 @@ Neutraliza os ataques das fases anteriores: o canal passa a usar **TLS**, o serv
 
 ```bash
 # Terminal 1 — servidor TLS
-cd fase3-defense && python3 servidor_tls.py
+cd fase3-defense && python3 server_tls.py
 
 # Terminal 2 — cliente TLS
-cd fase3-defense && python3 cliente_tls.py
+cd fase3-defense && python3 client_tls.py
 ```
 
 Ao conectar, o cliente informa a cifra TLS negociada e que o servidor foi autenticado pelo certificado. A geração do certificado e as demonstrações da defesa (sniffer que não lê mais, impostor recusado e proxy MITM neutralizado) estão em `fase3-defense/DEFESA_TLS.md`.
