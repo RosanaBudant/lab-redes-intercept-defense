@@ -116,21 +116,45 @@ cliente, que confia apenas em `servidor.crt`, recusa a conexão com:
 Mesmo com o mesmo CN e SAN, o impostor não tem a identidade confiável — o MITM
 é barrado.
 
-### 4.3. O proxy MITM da Fase 2 não consegue mais atacar (integridade)
+### 4.3. Tráfego protegido através do proxy da Fase 2
 
-Com o cliente apontando ao proxy da Fase 2 (porta 8888) e o proxy encaminhando
-ao servidor TLS (9999):
+O proxy da Fase 2 foi implementado para interpretar mensagens terminadas por
+`\n`. O fluxo TLS é binário, então o modo de alteração por linha não deve ser
+usado para concluir que houve erro de validação do certificado: ele pode
+esperar pelo delimitador ou encerrar sem estabelecer o túnel.
+
+Para verificar que o proxy não consegue ler os comandos, use o modo transparente,
+que repassa os bytes sem tentar interpretar ou alterar mensagens:
 ```bash
 # T1
 cd fase3-defense && python3 server_tls.py
 # T2
-cd fase2-mitm && python3 proxy.py
+cd fase2-mitm && python3 proxy.py --transparente
 # T3
 cd fase3-defense && python3 client_tls.py --porta 8888
 ```
-O proxy passa a ver apenas bytes cifrados do handshake TLS (não mais
-`[INTERCEPTADO] SET cor azul`), e a tentativa de interceptação resulta em falha
-de handshake no servidor. O ataque de modificação da Fase 2 deixa de funcionar.
+O TLS continua sendo estabelecido entre o cliente e o servidor através do
+proxy. O proxy deve observar somente bytes do TLS, sem exibir comandos ou
+valores. Esse teste demonstra que o proxy de aplicação não interpreta o
+conteúdo protegido. Por ser transparente, ele não tenta adulterá-lo e, portanto,
+esta captura não é evidência de uma tentativa ativa de modificação.
+
+O cliente também deve recusar um servidor que apresente certificado não
+configurado como confiável (seção 4.2). Registre o erro real do cliente; não
+atribua uma falha de encaminhamento do proxy à validação do certificado.
+Uma prova de alteração ativa do tráfego protegido deve ser registrada
+separadamente, pela demonstração correspondente da Fase 3.
+
+Para repetir somente as capturas e testes de TLS desta etapa no Ubuntu/WSL:
+
+```bash
+cd /mnt/d/lab-redes-intercept-defense/fase3-defense
+sudo bash capturar_pcap_fase3.sh
+```
+
+Cada execução cria um novo subdiretório em `evidencias/`, gera certificados
+temporários fora do repositório e encerra apenas os processos que ela própria
+iniciou.
 
 ## Observação de segurança
 

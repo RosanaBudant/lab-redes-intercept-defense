@@ -212,7 +212,7 @@ O modelo de concorrência e as regiões críticas estão descritos em `fase2-mit
 
 ## Fase 3 — Defesa com TLS e autenticação
 
-Neutraliza os ataques das fases anteriores: o canal passa a usar **TLS**, o servidor é **autenticado por certificado** e as senhas são guardadas com **hash**. O sniffer da Fase 1 deixa de ler o conteúdo e o proxy da Fase 2 deixa de conseguir alterar as mensagens.
+Protege o canal com **TLS**, autentica o servidor por certificado e armazena as senhas com **hash**. As evidências desta fase mostram que o sniffer e um proxy transparente não leem o conteúdo e que o cliente rejeita um certificado não confiável.
 
 | Componente | Arquivo | Descrição |
 |------------|---------|-----------|
@@ -221,6 +221,9 @@ Neutraliza os ataques das fases anteriores: o canal passa a usar **TLS**, o serv
 | Sniffer adaptado | `fase3-defense/sniffer_tls.py` | Mostra `[TEXTO]` ou `[CIFRADO]` (prova antes/depois) |
 | Certificado | `fase3-defense/servidor.crt` | Certificado público (a chave privada não é versionada) |
 | Documentação | `fase3-defense/DEFESA_TLS.md` | Geração de certificado, execução e provas da defesa |
+| Coletor de evidências | `fase3-defense/capturar_evidencias.py` | Captura somente os cenários TLS da Fase 3 e valida os resultados com TShark |
+| Evidências | `fase3-defense/evidencias/` | PCAPs e registros dos testes da Fase 3 |
+| Relatório final | `fase3-defense/RELATORIO_FINAL.md` | Consolidação das fases, análise de ameaças e registro das evidências |
 
 ### Como executar (serviço protegido)
 
@@ -232,7 +235,22 @@ cd fase3-defense && python3 server_tls.py
 cd fase3-defense && python3 client_tls.py
 ```
 
-Ao conectar, o cliente informa a cifra TLS negociada e que o servidor foi autenticado pelo certificado. A geração do certificado e as demonstrações da defesa (sniffer que não lê mais, impostor recusado e proxy MITM neutralizado) estão em `fase3-defense/DEFESA_TLS.md`.
+Ao conectar, o cliente informa a cifra TLS negociada e que o servidor foi autenticado pelo certificado. A geração do certificado e os testes da defesa estão em `fase3-defense/DEFESA_TLS.md`. As Fases 1 e 2 já validadas não são repetidas pelo coletor da Fase 3.
+
+### Reproduzir as evidências no Ubuntu/WSL
+
+Com `openssl` e `tshark` instalados, execute o coletor como root a partir do
+Ubuntu/WSL. Ele gera um subdiretório novo em `fase3-defense/evidencias/`, sem
+encerrar processos que já estejam em execução:
+
+```bash
+cd /mnt/d/lab-redes-intercept-defense/fase3-defense
+sudo bash capturar_pcap_fase3.sh
+```
+
+O coletor grava somente evidências da Fase 3. O relatório registra os filtros e
+os números de quadros observados. Abra os PCAPs dessa execução no Wireshark
+para inspecionar as conversas.
 
 ---
 

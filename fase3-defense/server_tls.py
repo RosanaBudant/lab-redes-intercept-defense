@@ -1,9 +1,10 @@
 import hashlib
+import hmac
 import os
 import socket
 import ssl
 import threading
-import hmac
+import time
 
 HOST = "0.0.0.0"
 PORTA = 9999
@@ -17,6 +18,22 @@ TIMEOUT_LEITURA = 60     # segundos de inatividade permitidos na conversa
 # Parametros do hash de senha (PBKDF2)
 ITERACOES_HASH = 200_000
 TAMANHO_SALT = 16
+
+
+def agora():
+    """Horario atual legivel, para os registros de seguranca."""
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def log(evento, endereco=None, detalhe=""):
+    """
+    Registro de seguranca padronizado.
+    Nunca inclui conteudo da aplicacao (senhas, valores) - apenas o tipo de
+    evento, a origem, o horario e dados tecnicos nao sensiveis (ex.: cifra TLS).
+    """
+    origem = f" origem={endereco[0]}:{endereco[1]}" if endereco else ""
+    extra = f" {detalhe}" if detalhe else ""
+    print(f"[{agora()}] {evento}{origem}{extra}")
 
 
 def gerar_hash(senha, salt):
@@ -33,8 +50,7 @@ def criar_usuarios(senhas_em_texto):
     """
     Recebe {usuario: senha_texto} e devolve {usuario: (salt, hash)}.
     As senhas em texto sao usadas apenas para gerar os hashes na
-    inicializacao e nao ficam guardadas em lugar nenhum. Num sistema
-    real, os hashes ja viriam prontos de um banco de dados.
+    inicializacao e nao ficam guardadas em lugar nenhum.
     """
     usuarios = {}
     for usuario, senha in senhas_em_texto.items():
@@ -43,7 +59,6 @@ def criar_usuarios(senhas_em_texto):
     return usuarios
 
 
-# Senhas de teste (apenas para gerar os hashes na inicializacao)
 USUARIOS = criar_usuarios({"alice": "senha123", "bob": "12345"})
 
 ARMAZENAMENTO = {}
@@ -56,11 +71,10 @@ def senha_confere(usuario, senha):
         return False
     salt, hash_guardado = registro
     hash_tentativa = gerar_hash(senha, salt)
-    # compare_digest evita ataques de tempo (timing attack)
     return hmac.compare_digest(hash_tentativa, hash_guardado)
 
 
-def processar_comando(linha, autenticado):
+def processar_comando(linha, autenticado, endereco):
     partes = linha.split(maxsplit=2)
     comando = partes[0].upper()
 
@@ -71,13 +85,14 @@ def processar_comando(linha, autenticado):
         usuario, senha = partes[1], partes[2]
 
         if senha_confere(usuario, senha):
-            print(f"[LOGIN OK] usuario={usuario}")
+            log("LOGIN_OK", endereco, f"usuario={usuario}")
             return "OK\n", True
         else:
-            print(f"[LOGIN FALHOU] usuario={usuario}")
+            log("LOGIN_FALHOU", endereco, f"usuario={usuario}")
             return "Erro! Login invalido\n", False
 
     if not autenticado:
+        log("COMANDO_NAO_AUTENTICADO", endereco, f"comando={comando}")
         return "Erro! Nao autenticado\n", autenticado
 
     if comando == "SET":
@@ -85,7 +100,7 @@ def processar_comando(linha, autenticado):
             return "Erro! Argumentos invalidos\n", autenticado
         chave, valor = partes[1], partes[2]
         ARMAZENAMENTO[chave] = valor
-        print(f"[SET] {chave} = {valor}")
+        log("SET", endereco, f"chave={chave}")
         return "OK\n", autenticado
 
     if comando == "GET":
@@ -93,7 +108,7 @@ def processar_comando(linha, autenticado):
             return "Erro! Argumentos invalidos\n", autenticado
         chave = partes[1]
         valor = ARMAZENAMENTO.get(chave)
-        print(f"[GET] {chave} -> {valor}")
+        log("GET", endereco, f"chave={chave}")
         if valor is None:
             return "Erro! Chave nao encontrada\n", autenticado
         return f"OK {valor}\n", autenticado
@@ -103,33 +118,40 @@ def processar_comando(linha, autenticado):
             return "Erro! Argumentos invalidos\n", autenticado
         chave = partes[1]
         ARMAZENAMENTO.pop(chave, None)
-        print(f"[DEL] {chave}")
+        log("DEL", endereco, f"chave={chave}")
         return "OK\n", autenticado
 
     if comando == "QUIT":
         return "OK tchauzinho;)\n", autenticado
 
+    log("COMANDO_DESCONHECIDO", endereco, f"comando={comando}")
     return "Erro! Comando desconhecido\n", autenticado
 
 
 def atender_cliente(conexao_crua, endereco, contexto):
     TAMANHO_MAXIMO_MENSAGEM = 4096
 
-    # Handshake TLS feito dentro da thread, para nao bloquear o laco
-    # principal. Timeout para que uma conexao que nao conclui o handshake
-    # nao prenda a thread.
+    # Handshake TLS dentro da thread, com timeout, para nao bloquear o laco
+    # principal nem prender a thread em uma conexao que nao conclui o handshake.
     try:
         conexao_crua.settimeout(TIMEOUT_HANDSHAKE)
         conexao = contexto.wrap_socket(conexao_crua, server_side=True)
     except (ssl.SSLError, socket.timeout, OSError) as erro:
-        print(f"[ERRO] Falha no handshake TLS com {endereco}: {erro}")
+        # Evento de seguranca: handshake falhou (cliente sem TLS, erro de
+        # certificado, ou tentativa de interceptacao). Util para deteccao.
+        log("HANDSHAKE_FALHOU", endereco, f"motivo={type(erro).__name__}")
         conexao_crua.close()
         return
 
-    # Depois do handshake, aplica um timeout de inatividade na leitura.
     conexao.settimeout(TIMEOUT_LEITURA)
 
-    print(f"[+] Conexao TLS de {endereco}")
+    # Handshake concluido: registra a cifra e a versao TLS negociadas.
+    cifra = conexao.cipher()
+    if cifra:
+        log("CONEXAO_TLS", endereco, f"versao={cifra[1]} cifra={cifra[0]}")
+    else:
+        log("CONEXAO_TLS", endereco)
+
     autenticado = False
     buffer = bytearray()
 
@@ -140,10 +162,7 @@ def atender_cliente(conexao_crua, endereco, contexto):
 
                 if not dados:
                     if buffer:
-                        print(
-                            f"[ERRO] Mensagem incompleta ao desconectar: "
-                            f"{endereco}"
-                        )
+                        log("MENSAGEM_INCOMPLETA", endereco)
                     break
 
                 buffer.extend(dados)
@@ -152,7 +171,7 @@ def atender_cliente(conexao_crua, endereco, contexto):
                     posicao = buffer.index(b"\n")
 
                     if posicao > TAMANHO_MAXIMO_MENSAGEM:
-                        print(f"[ERRO] Mensagem muito grande de {endereco}")
+                        log("MENSAGEM_MUITO_GRANDE", endereco)
                         return
 
                     mensagem = bytes(buffer[:posicao])
@@ -161,39 +180,36 @@ def atender_cliente(conexao_crua, endereco, contexto):
                     try:
                         linha = mensagem.decode("utf-8").strip()
                     except UnicodeDecodeError:
-                        print(
-                            f"[ERRO] Mensagem com codificacao invalida "
-                            f"de {endereco}"
-                        )
+                        log("CODIFICACAO_INVALIDA", endereco)
                         return
 
                     if not linha:
                         continue
 
-                    print(f"[RECV {endereco}] {linha}")
+                    # Registro do comando recebido SEM os argumentos, para nao
+                    # expor conteudo sensivel (senhas, valores) nos logs.
+                    comando = linha.split(maxsplit=1)[0].upper()
+                    log("RECV", endereco, f"comando={comando}")
 
                     resposta, autenticado = processar_comando(
-                        linha, autenticado
+                        linha, autenticado, endereco
                     )
                     conexao.sendall(resposta.encode("utf-8"))
 
                     if linha.upper() == "QUIT":
-                        print(f"[-] Cliente solicitou encerramento: {endereco}")
+                        log("QUIT", endereco)
                         return
 
                 if len(buffer) > TAMANHO_MAXIMO_MENSAGEM:
-                    print(
-                        f"[ERRO] Mensagem incompleta muito grande "
-                        f"de {endereco}"
-                    )
+                    log("MENSAGEM_INCOMPLETA_GRANDE", endereco)
                     return
 
         except socket.timeout:
-            print(f"[ERRO] Cliente {endereco} inativo por muito tempo (timeout)")
+            log("TIMEOUT_INATIVIDADE", endereco)
         except OSError as erro:
-            print(f"[ERRO] Falha de comunicacao com {endereco}: {erro}")
+            log("ERRO_COMUNICACAO", endereco, f"motivo={type(erro).__name__}")
 
-    print(f"[-] Conexao encerrada: {endereco}")
+    log("CONEXAO_ENCERRADA", endereco)
 
 
 def main():
@@ -205,7 +221,7 @@ def main():
     socket_servidor.bind((HOST, PORTA))
     socket_servidor.listen(5)
 
-    print(f"[*] Servidor TLS escutando em {HOST}:{PORTA}")
+    log("SERVIDOR_INICIADO", detalhe=f"porta={PORTA}")
 
     try:
         while True:
@@ -219,7 +235,7 @@ def main():
             thread_cliente.start()
 
     except KeyboardInterrupt:
-        print("\n[*] Encerrando servidor.")
+        log("SERVIDOR_ENCERRANDO")
 
     finally:
         socket_servidor.close()
