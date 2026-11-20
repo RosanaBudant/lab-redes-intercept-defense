@@ -280,6 +280,21 @@ def tshark_pacotes(arquivo, filtro):
     return [linha for linha in resultado.stdout.splitlines() if linha.strip()]
 
 
+def proxy_exibiu_conteudo(texto):
+    """Verifica se o proxy exibiu comando/credencial em claro no que repassou.
+
+    Ignora as linhas de banner do proxy (iniciadas por '[*]'), pois o modo
+    demonstracao imprime 'SET cor azul sera alterado para vermelho' apenas para
+    explicar a regra de alteracao - isso nao e conteudo interceptado.
+    """
+    conteudo = "\n".join(
+        linha
+        for linha in texto.splitlines()
+        if not linha.lstrip().startswith("[*]")
+    )
+    return "LOGIN alice senha123" in conteudo or "SET cor azul" in conteudo
+
+
 def coletar_fase3(pasta, temporario):
     certificado = criar_certificado(temporario, "servidor")
 
@@ -320,6 +335,7 @@ def coletar_fase3(pasta, temporario):
         [
             "openssl",
             "s_server",
+            "-4",
             "-accept",
             "9998",
             "-cert",
@@ -343,7 +359,7 @@ def coletar_fase3(pasta, temporario):
                 "python3",
                 str(FASE3 / "client_tls.py"),
                 "--host",
-                "localhost",
+                "127.0.0.1",
                 "--porta",
                 "9998",
                 "--cert",
@@ -402,10 +418,83 @@ def coletar_fase3(pasta, temporario):
     log_proxy = (pasta / "proxy_transparente.txt").read_text(
         encoding="utf-8", errors="replace"
     )
-    if "LOGIN alice senha123" in log_proxy or "SET cor azul" in log_proxy:
+    if proxy_exibiu_conteudo(log_proxy):
         raise RuntimeError("O proxy exibiu comandos da aplicacao em texto claro")
 
-    return pcap_direto, pcap_certificado, pcap_proxy
+    # Cenario 4: proxy MITM da Fase 2 em modo ALTERADOR (sem --transparente).
+    # Diferente do transparente, aqui o proxy tenta ler e adulterar o conteudo
+    # (SET cor azul -> SET cor vermelho). Contra o servico TLS, a tentativa deve
+    # FALHAR: o servidor nao conclui o handshake e registra o evento, e o proxy
+    # so enxerga bytes cifrados - nunca os comandos em claro.
+    verificar_portas_livres([9999, 8888])
+    servidor = iniciar(
+        "servidor TLS via proxy alterador",
+        ["python3", "-u", str(FASE3 / "server_tls.py")],
+        temporario,
+        pasta / "tls_proxy_alterador_servidor.txt",
+    )
+    aguardar_porta(9999, servidor)
+    proxy_alt = iniciar(
+        "proxy alterador",
+        ["python3", "-u", "proxy.py"],
+        FASE2,
+        pasta / "proxy_alterador.txt",
+    )
+    aguardar_porta(8888, proxy_alt)
+    captura, pcap_proxy_alt = iniciar_captura(
+        pasta, "tls_via_proxy_alterador.pcap", {8888, 9999}
+    )
+    try:
+        try:
+            resultado, texto_cliente = executar_cliente(
+                pasta,
+                "tls_proxy_alterador_cliente.txt",
+                [
+                    "python3",
+                    str(FASE3 / "client_tls.py"),
+                    "--host",
+                    "localhost",
+                    "--porta",
+                    "8888",
+                    "--cert",
+                    str(certificado),
+                ],
+                temporario,
+                entrada=COMANDOS,
+            )
+            sessao_concluida = (
+                resultado.returncode == 0 and "OK azul" in texto_cliente
+            )
+        except subprocess.TimeoutExpired:
+            # O cliente travou no handshake contra o proxy alterador: a sessao
+            # TLS nao se estabeleceu, o que tambem comprova o ataque falhando.
+            sessao_concluida = False
+            (pasta / "tls_proxy_alterador_cliente.txt").write_text(
+                "codigo_de_saida=timeout\n"
+                "[!] cliente nao concluiu o handshake (timeout) - "
+                "sessao TLS nao estabelecida via proxy alterador\n",
+                encoding="utf-8",
+            )
+    finally:
+        parar_captura(captura, pcap_proxy_alt)
+        parar(proxy_alt)
+        parar(servidor)
+
+    if sessao_concluida:
+        raise RuntimeError(
+            "O proxy alterador completou a sessao TLS e obteve 'OK azul' - "
+            "a defesa falhou"
+        )
+
+    log_proxy_alt = (pasta / "proxy_alterador.txt").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if proxy_exibiu_conteudo(log_proxy_alt):
+        raise RuntimeError(
+            "O proxy alterador exibiu comandos da aplicacao em texto claro"
+        )
+
+    return pcap_direto, pcap_certificado, pcap_proxy, pcap_proxy_alt
 
 
 def gravar_resultados(pasta, arquivos):
@@ -413,6 +502,7 @@ def gravar_resultados(pasta, arquivos):
         "TLS direto": (arquivos[0], "tls"),
         "Certificado nao confiavel": (arquivos[1], "tls"),
         "TLS via proxy transparente": (arquivos[2], "tls"),
+        "TLS via proxy alterador (MITM Fase 2)": (arquivos[3], "tls"),
     }
     linhas = [
         f"Evidencias exclusivas da Fase 3 — execucao {pasta.name}",
@@ -510,17 +600,37 @@ def gravar_resultados(pasta, arquivos):
             (
                 "Proxy transparente: marcadores de comandos/credenciais em claro "
                 "na saida: nenhum."
-                if "LOGIN alice senha123" not in ler_saida("proxy_transparente.txt")
-                and "SET cor azul" not in ler_saida("proxy_transparente.txt")
+                if not proxy_exibiu_conteudo(ler_saida("proxy_transparente.txt"))
                 else "Proxy transparente: foram encontrados marcadores em claro."
             ),
             "Eventos do servidor (TLS direto): "
             + resumir_eventos_servidor("tls_servidor.txt"),
-            "Eventos do servidor (TLS via proxy): "
+            "Eventos do servidor (TLS via proxy transparente): "
             + resumir_eventos_servidor("tls_proxy_servidor.txt"),
+            "TLS via proxy alterador (MITM Fase 2): "
+            + resumir_cliente("tls_proxy_alterador_cliente.txt"),
             (
-                "Limite: o proxy usado nesta coleta foi transparente e nao tentou "
-                "adulterar registros TLS."
+                "MITM Fase 2 barrado: servidor registrou HANDSHAKE_FALHOU="
+                + (
+                    "sim"
+                    if "HANDSHAKE_FALHOU" in ler_saida("tls_proxy_alterador_servidor.txt")
+                    else "nao"
+                )
+                + "; valor adulterado aceito pelo servidor=nao "
+                "(sessao TLS nao concluida)."
+            ),
+            (
+                "Proxy alterador: marcadores de comandos/credenciais em claro "
+                "na saida: nenhum."
+                if not proxy_exibiu_conteudo(ler_saida("proxy_alterador.txt"))
+                else "Proxy alterador: foram encontrados marcadores em claro."
+            ),
+            "Eventos do servidor (TLS via proxy alterador): "
+            + resumir_eventos_servidor("tls_proxy_alterador_servidor.txt"),
+            (
+                "Nota: o proxy MITM da Fase 2 foi testado nos dois modos - "
+                "transparente (repasse, confirma confidencialidade) e alterador "
+                "(tentativa de adulteracao, barrada pelo TLS com falha de handshake)."
             ),
         ]
     )

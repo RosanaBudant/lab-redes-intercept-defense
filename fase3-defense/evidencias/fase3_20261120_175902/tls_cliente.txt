@@ -1,0 +1,9 @@
+codigo_de_saida=0
+[*] Conexao TLS estabelecida com localhost:9999
+[*] Servidor autenticado. Cifra: TLS_AES_256_GCM_SHA384 (TLSv1.3)
+Comandos: LOGIN usuario senha | SET chave valor | GET chave | DEL chave | QUIT
+> [OK]  OK
+> [OK]  OK
+> [OK]  OK azul
+> [OK]  OK tchauzinho;)
+[*] Conexao encerrada
