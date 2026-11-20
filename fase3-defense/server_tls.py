@@ -100,7 +100,7 @@ def processar_comando(linha, autenticado, endereco):
             return "Erro! Argumentos invalidos\n", autenticado
         chave, valor = partes[1], partes[2]
         ARMAZENAMENTO[chave] = valor
-        log("SET", endereco, f"chave={chave}")
+        log("SET", endereco)
         return "OK\n", autenticado
 
     if comando == "GET":
@@ -108,7 +108,7 @@ def processar_comando(linha, autenticado, endereco):
             return "Erro! Argumentos invalidos\n", autenticado
         chave = partes[1]
         valor = ARMAZENAMENTO.get(chave)
-        log("GET", endereco, f"chave={chave}")
+        log("GET", endereco)
         if valor is None:
             return "Erro! Chave nao encontrada\n", autenticado
         return f"OK {valor}\n", autenticado
@@ -118,7 +118,7 @@ def processar_comando(linha, autenticado, endereco):
             return "Erro! Argumentos invalidos\n", autenticado
         chave = partes[1]
         ARMAZENAMENTO.pop(chave, None)
-        log("DEL", endereco, f"chave={chave}")
+        log("DEL", endereco)
         return "OK\n", autenticado
 
     if comando == "QUIT":

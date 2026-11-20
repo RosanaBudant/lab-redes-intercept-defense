@@ -1,10 +1,10 @@
-Evidencias exclusivas da Fase 3 — execucao fase3_20261120_175902
+Evidencias exclusivas da Fase 3 — execucao fase3_20261120_183111
 Interface: lo (AF_PACKET raw socket); quadros numerados com TShark 4.2.2.
 Credenciais e valores sao ficticios e usados somente no laboratorio.
 
 TLS direto: 7, 11, 15, 17, 19, 21, 25, 29, 31, 33, 35, 37, 39
 Certificado nao confiavel: 7, 11, 15
-TLS via proxy transparente: 7, 17, 21, 25, 29, 31, 33, 35, 37, 39, 41, 43, 49, 53, 57, 59, 61, 63, 65, 67, 69, 71, 73, 75, 77, 81
+TLS via proxy transparente: 7, 17, 21, 25, 29, 31, 33, 35, 37, 39, 41, 43, 49, 53, 57, 59, 61, 63, 65, 67, 69, 71, 73, 75, 77, 79
 TLS via proxy alterador (MITM Fase 2): 7, 17
 Marcadores em claro em tls_direto.pcap: nenhum
 Marcadores em claro em certificado_nao_confiavel.pcap: nenhum
