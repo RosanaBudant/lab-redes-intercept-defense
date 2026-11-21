@@ -142,8 +142,15 @@ esta captura não é evidência de uma tentativa ativa de modificação.
 O cliente também deve recusar um servidor que apresente certificado não
 configurado como confiável (seção 4.2). Registre o erro real do cliente; não
 atribua uma falha de encaminhamento do proxy à validação do certificado.
-Uma prova de alteração ativa do tráfego protegido deve ser registrada
-separadamente, pela demonstração correspondente da Fase 3.
+
+Para observar o comportamento diante de uma tentativa ativa de intermediação com
+o proxy em modo alterador (Fase 2), use o proxy sem `--transparente` entre o
+cliente TLS e o servidor TLS. O coletor de evidências da Fase 3
+(`capturar_evidencias.py` / `capturar_pcap_fase3.sh`) inclui esse cenário: na
+execução `evidencias/fase3_20261120_183111/`, o cliente não concluiu o handshake
+(timeout), o servidor registrou `HANDSHAKE_FALHOU` e não houve valor adulterado
+aceito nem exposição de comandos/credenciais em claro pelo proxy (ver
+`RESULTADOS.txt` e `tls_via_proxy_alterador.pcap`).
 
 Para repetir somente as capturas e testes de TLS desta etapa no Ubuntu/WSL:
 

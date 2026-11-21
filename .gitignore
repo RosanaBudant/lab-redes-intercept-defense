@@ -55,3 +55,6 @@ servidor.key
 fase3-defense/impostor.*
 fase3-defense/servidor_impostor.py
 !fase3-defense/servidor.crt
+
+# PCAPs de evidência controlada da Fase 3
+!fase3-defense/evidencias/**/*.pcap
