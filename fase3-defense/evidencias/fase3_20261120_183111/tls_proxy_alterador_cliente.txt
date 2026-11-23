@@ -1,0 +1,2 @@
+codigo_de_saida=timeout
+[!] cliente nao concluiu o handshake (timeout) - sessao TLS nao estabelecida via proxy alterador

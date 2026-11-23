@@ -1,0 +1,27 @@
+Evidencias exclusivas da Fase 3 — execucao fase3_20261120_183111
+Interface: lo (AF_PACKET raw socket); quadros numerados com TShark 4.2.2.
+Credenciais e valores sao ficticios e usados somente no laboratorio.
+
+TLS direto: 7, 11, 15, 17, 19, 21, 25, 29, 31, 33, 35, 37, 39
+Certificado nao confiavel: 7, 11, 15
+TLS via proxy transparente: 7, 17, 21, 25, 29, 31, 33, 35, 37, 39, 41, 43, 49, 53, 57, 59, 61, 63, 65, 67, 69, 71, 73, 75, 77, 79
+TLS via proxy alterador (MITM Fase 2): 7, 17
+Marcadores em claro em tls_direto.pcap: nenhum
+Marcadores em claro em certificado_nao_confiavel.pcap: nenhum
+Marcadores em claro em tls_via_proxy.pcap: nenhum
+Marcadores em claro em tls_via_proxy_alterador.pcap: nenhum
+
+Resultados consolidados:
+TLS direto: codigo_de_saida=0; servidor_autenticado=sim; cifra=TLS_AES_256_GCM_SHA384 (TLSv1.3); respostas_OK=4; GET_OK_azul=sim
+Sniffer TLS: 26 registros marcados [CIFRADO]; 0 registros marcados [TEXTO].
+Certificado nao confiavel: codigo_de_saida=1; cliente reportou CERTIFICATE_VERIFY_FAILED.
+Servidor impostor: recebeu alerta TLS unknown ca.
+TLS via proxy transparente: codigo_de_saida=0; servidor_autenticado=sim; cifra=TLS_AES_256_GCM_SHA384 (TLSv1.3); respostas_OK=4; GET_OK_azul=sim
+Proxy transparente: marcadores de comandos/credenciais em claro na saida: nenhum.
+Eventos do servidor (TLS direto): CONEXAO_TLS, RECV, LOGIN_OK, SET, GET, QUIT
+Eventos do servidor (TLS via proxy transparente): CONEXAO_TLS, RECV, LOGIN_OK, SET, GET, QUIT
+TLS via proxy alterador (MITM Fase 2): codigo_de_saida=timeout; servidor_autenticado=nao; cifra=cifra nao informada; respostas_OK=0; GET_OK_azul=nao
+MITM Fase 2 barrado: servidor registrou HANDSHAKE_FALHOU=sim; valor adulterado aceito pelo servidor=nao (sessao TLS nao concluida).
+Proxy alterador: marcadores de comandos/credenciais em claro na saida: nenhum.
+Eventos do servidor (TLS via proxy alterador): HANDSHAKE_FALHOU
+Nota: o proxy MITM da Fase 2 foi testado nos dois modos - transparente (repasse, confirma confidencialidade) e alterador (tentativa de adulteracao, barrada pelo TLS com falha de handshake).
